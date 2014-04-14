@@ -328,3 +328,15 @@ def test_fetch_yeo_2011_atlas():
     assert_true(isinstance(dataset.tight_17, basestring))
     assert_true(isinstance(dataset.tight_7, basestring))
     assert_equal(len(mock.urls), 1)
+
+
+@with_setup(setup_tmpdata_and_mock, teardown_tmpdata)
+def test_fetch_oasis_vbm():
+    dataset = datasets.fetch_oasis_vbm(data_dir=tmpdir)
+    assert_equal(len(dataset.gray_matter_maps), 387)
+    assert_equal(len(dataset.white_matter_maps), 387)
+    assert_true(isinstance(dataset.gray_matter_maps[0], basestring))
+    assert_true(isinstance(dataset.white_matter_maps[0], basestring))
+    assert_true(isinstance(dataset.ext_vars, basestring))
+    assert_true(isinstance(dataset.data_usage_agreement, basestring))
+    assert_equal(len(mock.urls), 3)
