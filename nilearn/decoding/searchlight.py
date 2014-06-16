@@ -155,7 +155,13 @@ def _group_iter_search_light(list_rows, estimator, X, y,
         score for each voxel. dtype: float64.
     """
     par_scores = np.zeros(len(list_rows))
-    t0 = time.time()
+    
+    from nilearn._utils.progress import progress_bar
+    sl_progress = progress_bar(n_features = len(list_rows), \
+                               n_voxels = total, \
+                               thread_id = thread_id, \
+                               verbose = verbose)
+    
     for i, row in enumerate(list_rows):
         kwargs = dict()
         if not LooseVersion(sklearn.__version__) < LooseVersion('0.15'):
@@ -166,24 +172,11 @@ def _group_iter_search_light(list_rows, estimator, X, y,
         par_scores[i] = np.mean(cross_val_score(estimator, X[:, row],
                                                 y, cv=cv, n_jobs=1,
                                                 **kwargs))
+        
         if verbose > 0:
-            # One can't print less than each 10 iterations
-            step = 11 - min(verbose, 10)
-            if (i % step == 0):
-                # If there is only one job, progress information is fixed
-                if total == len(list_rows):
-                    crlf = "\r"
-                else:
-                    crlf = "\n"
-                percent = float(i) / len(list_rows)
-                percent = round(percent * 100, 2)
-                dt = time.time() - t0
-                # We use a max to avoid a division by zero
-                remaining = (100. - percent) / max(0.01, percent) * dt
-                sys.stderr.write(
-                    "Job #%d, processed %d/%d voxels "
-                    "(%0.2f%%, %i seconds remaining)%s"
-                    % (thread_id, i, len(list_rows), percent, remaining, crlf))
+            additional_message = 'Add'
+            sl_progress.measure_progress(i, additional_message)
+    
     return par_scores
 
 
