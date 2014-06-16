@@ -10,8 +10,6 @@ neighborhood of each location of a domain.
 #
 # License: simplified BSD
 
-import time
-import sys
 import warnings
 from distutils.version import LooseVersion
 
@@ -27,9 +25,10 @@ from sklearn import neighbors
 import nibabel
 
 from .. import masking
-from .._utils import as_ndarray
+from .._utils import as_ndarray, ProgressBar
 
 ESTIMATOR_CATALOG = dict(svc=svm.LinearSVC, svr=svm.SVR)
+
 
 def search_light(X, y, estimator, A, scoring=None, cv=None, n_jobs=-1,
                  verbose=0):
@@ -98,6 +97,7 @@ class GroupIterator(object):
     n_jobs : int, optional
         The number of CPUs to use to do the computation. -1 means
         'all CPUs'. Defaut is 1
+
     """
     def __init__(self, n_features, n_jobs=1):
         self.n_features = n_features
@@ -155,13 +155,11 @@ def _group_iter_search_light(list_rows, estimator, X, y,
         score for each voxel. dtype: float64.
     """
     par_scores = np.zeros(len(list_rows))
-    
-    from nilearn._utils.progress import progress_bar
-    sl_progress = progress_bar(n_features = len(list_rows), \
-                               n_voxels = total, \
-                               thread_id = thread_id, \
-                               verbose = verbose)
-    
+
+    # instanciate a "progress-bar object"
+    progress = ProgressBar(n_features=len(list_rows), n_voxels=total,
+                              thread_id=thread_id, verbose=verbose)
+
     for i, row in enumerate(list_rows):
         kwargs = dict()
         if not LooseVersion(sklearn.__version__) < LooseVersion('0.15'):
@@ -172,11 +170,11 @@ def _group_iter_search_light(list_rows, estimator, X, y,
         par_scores[i] = np.mean(cross_val_score(estimator, X[:, row],
                                                 y, cv=cv, n_jobs=1,
                                                 **kwargs))
-        
+
         if verbose > 0:
             additional_message = 'Add'
-            sl_progress.measure_progress(i, additional_message)
-    
+            progress.measure_progress(i, additional_message)
+
     return par_scores
 
 
