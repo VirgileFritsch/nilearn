@@ -1,22 +1,41 @@
+"""
+This file provides the implementation of an object that can dynamically show
+the progress of a process.
+
+It is up to the Nilearn developers to adapt the ProgressBar object
+within their procedures. They should identify milestones that define a
+discretization of the process run (e.g. iterations for an algorithm,
+downloaded file size for a downloader, number of processed subjects
+for an operation on a multi-subject dataset). Then, the ProgressBar
+object behaves like an iterator that generates and prints strings
+on-demand.
+
+
+"""
+#Author: Aina Frau-Pascual, Jun. 2014
 import sys
 import time
 
 
+class ProgressBar(object):
+    """Shows the progress of a process
 
-class progress_bar(object):
-    """
-    Shows the progress of the process
-    
     Parameters:
     ----------
-    - n_features: number of features
-    - n_voxels: number of voxels
-    - thread_id: process id
-    - verbose: level of verbosity
+    n_features: int,
+      number of features
+
+    n_voxels: int,
+      number of voxels
+
+    thread_id: int,
+      process id
+
+    verbose: string,
+      level of verbosity
+
     """
-    
-    def __init__(self, n_features = 1, n_voxels = 1,
-                       thread_id = 0, verbose = 0):
+    def __init__(self, n_features=1, n_voxels=1, thread_id=0, verbose=0):
         self.n_features = n_features
         self.n_voxels = n_voxels
         self.thread_id = thread_id
@@ -25,11 +44,10 @@ class progress_bar(object):
         self.step = 11 - min(verbose, 10)
         # starting timepoint: declare object when t0
         self.t0 = time.time()
-        
-        
-    def measure_progress(self, ifeat, message):
-        """ 
-        Measures progress: done and remaining.
+
+
+    def show_progress(self, ifeat, message):
+        """Measures progress: done and remaining.
         
         Parameters:
         ----------
