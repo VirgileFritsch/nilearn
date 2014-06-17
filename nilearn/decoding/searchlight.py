@@ -25,7 +25,7 @@ from sklearn import neighbors
 import nibabel
 
 from .. import masking
-from .._utils import as_ndarray, ProgressBar
+from .._utils import as_ndarray, SharedProgressBar
 
 ESTIMATOR_CATALOG = dict(svc=svm.LinearSVC, svr=svm.SVR)
 
@@ -73,12 +73,17 @@ def search_light(X, y, estimator, A, scoring=None, cv=None, n_jobs=-1,
     scores : array-like of shape (number of rows in A)
         search_light scores
     """
-    group_iter = GroupIterator(A.shape[0], n_jobs)
+    n_features = A.shape[0]
+    group_iter = GroupIterator(n_features, n_jobs)
+    # instanciate a progress-bar object
+    progress = SharedProgressBar()
+    progress.start()
+    progress = progress.Pro(n_steps=n_features, verbose=verbose)
     scores = Parallel(n_jobs=n_jobs, verbose=verbose)(
         delayed(_group_iter_search_light)(
             A.rows[list_i],
             estimator, X, y, scoring, cv,
-            thread_id + 1, A.shape[0], verbose)
+            thread_id + 1, A.shape[0], progress)
         for thread_id, list_i in enumerate(group_iter))
     return np.concatenate(scores)
 
@@ -112,7 +117,7 @@ class GroupIterator(object):
 
 
 def _group_iter_search_light(list_rows, estimator, X, y,
-                             scoring, cv, thread_id, total, verbose=0):
+                             scoring, cv, thread_id, total, progress_bar):
     """Function for grouped iterations of search_light
 
     Parameters
@@ -146,19 +151,22 @@ def _group_iter_search_light(list_rows, estimator, X, y,
     total : int
         Total number of voxels, used for display
 
-    verbose : int, optional
-        The verbosity level. Defaut is 0
+    progress_bar : ProgressBar object
+      Object used to print the progress status of the algorithm.
+      If `progress_bar.verbose` is:
+        - 0, no progress is shown;
+        - 1, only the overall progress is shown
+        - 2, detailed status of each job is also shown
+
 
     Returns
     -------
     par_scores : numpy.ndarray
         score for each voxel. dtype: float64.
-    """
-    par_scores = np.zeros(len(list_rows))
 
-    # instanciate a "progress-bar object"
-    progress = ProgressBar(n_features=len(list_rows), n_voxels=total,
-                              thread_id=thread_id, verbose=verbose)
+    """
+    n_voxels_in_chunk = len(list_rows)
+    par_scores = np.zeros(n_voxels_in_chunk)
 
     for i, row in enumerate(list_rows):
         kwargs = dict()
@@ -171,9 +179,12 @@ def _group_iter_search_light(list_rows, estimator, X, y,
                                                 y, cv=cv, n_jobs=1,
                                                 **kwargs))
 
-        if verbose > 0:
-            additional_message = 'Add'
-            progress.measure_progress(i, additional_message)
+        if progress_bar.get_verbose() == 2:
+            additional_message = ('Job #%d processed %d/%d voxels'
+                                  % (thread_id, i + 1, n_voxels_in_chunk))
+        else:
+            additional_message = None
+        progress_bar.show_progress(additional_message)
 
     return par_scores
 
