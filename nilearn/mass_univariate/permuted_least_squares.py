@@ -10,6 +10,8 @@ from scipy import linalg
 from sklearn.utils import check_random_state
 import sklearn.externals.joblib as joblib
 
+from .._utils import SharedProgressBar
+
 
 def normalize_matrix_on_axis(m, axis=0):
     """ Normalize a 2D matrix on an axis.
@@ -141,7 +143,7 @@ def _t_score_with_covars_and_normalized_design(tested_vars, target_vars,
 def _permuted_ols_on_chunk(scores_original_data, tested_vars, target_vars,
                            confounding_vars=None, n_perm_chunk=10000,
                            intercept_test=True, two_sided_test=True,
-                           random_state=None):
+                           random_state=None, progress_bar=None):
     """Massively univariate group analysis with permuted OLS on a data chunk.
 
     To be used in a parallel computing context.
@@ -176,6 +178,13 @@ def _permuted_ols_on_chunk(scores_original_data, tested_vars, target_vars,
     random_state : int or None,
       Seed for random number generator, to have the same permutations
       in each computing units.
+
+    progress_bar : ProgressBar object
+      Object used to print the progress status of the algorithm.
+      If `progress_bar.verbose` is:
+        - 0, no progress is shown;
+        - 1, only the overall progress is shown
+        - 2, detailed status of each job is also shown
 
     Returns
     -------
@@ -228,13 +237,16 @@ def _permuted_ols_on_chunk(scores_original_data, tested_vars, target_vars,
         #  permutation computation)
         scores_as_ranks_part += (h0_fmax_part[i].reshape((-1, 1))
                                  < scores_original_data.T)
+        # show progress
+        if progress_bar is not None:
+            progress_bar.show_progress()
 
     return scores_as_ranks_part, h0_fmax_part.T
 
 
 def permuted_ols(tested_vars, target_vars, confounding_vars=None,
                  model_intercept=True, n_perm=10000, two_sided_test=True,
-                 random_state=None, n_jobs=1):
+                 random_state=None, verbose=False, n_jobs=1):
     """Massively univariate group analysis with permuted OLS.
 
     Tested variates are independently fitted to target variates descriptors
@@ -292,6 +304,9 @@ def permuted_ols(tested_vars, target_vars, confounding_vars=None,
       Seed for random number generator, to have the same permutations
       in each computing units.
 
+    verbose: boolean,
+      Enable verbose mode with progress bar.
+
     n_jobs : int,
       Number of parallel workers.
       If 0 is provided, all CPUs are used.
@@ -331,6 +346,15 @@ def permuted_ols(tested_vars, target_vars, confounding_vars=None,
     """
     # initialize the seed of the random generator
     rng = check_random_state(random_state)
+
+    # instanciate progress bar object (if needed)
+    if verbose and n_perm > 0:
+        print "Permuted OLS"
+        progress_bar = SharedProgressBar()
+        progress_bar.start()
+        progress_bar = progress_bar.Progress(n_steps=n_perm)
+    else:
+        progress_bar = None
 
     # check n_jobs (number of CPUs)
     if n_jobs == 0:  # invalid according to joblib's conventions
@@ -417,6 +441,9 @@ def permuted_ols(tested_vars, target_vars, confounding_vars=None,
     scores_original_data = _t_score_with_covars_and_normalized_design(
         testedvars_resid_covars, targetvars_resid_covars.T,
         covars_orthonormalized)
+    # # show progress
+    # if progress_bar is not None:
+    #     progress_bar.show_progress()
 
     ### Permutations
     # parallel computing units perform a reduced number of permutations each
@@ -439,7 +466,7 @@ def permuted_ols(tested_vars, target_vars, confounding_vars=None,
           (scores_original_data, testedvars_resid_covars,
            targetvars_resid_covars.T, covars_orthonormalized,
            n_perm_chunk=n_perm_chunk, intercept_test=intercept_test,
-           two_sided_test=two_sided_test,
+           two_sided_test=two_sided_test, progress_bar=progress_bar,
            random_state=rng.random_integers(np.iinfo(np.int32).max))
           for n_perm_chunk in n_perm_chunks)
     # reduce results

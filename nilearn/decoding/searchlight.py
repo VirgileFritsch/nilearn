@@ -76,14 +76,14 @@ def search_light(X, y, estimator, A, scoring=None, cv=None, n_jobs=-1,
     n_features = A.shape[0]
     group_iter = GroupIterator(n_features, n_jobs)
     # instanciate a progress-bar object
-    progress = SharedProgressBar()
-    progress.start()
-    progress = progress.Pro(n_steps=n_features, verbose=verbose)
+    progress_bar = SharedProgressBar()
+    progress_bar.start()
+    progress_bar = progress_bar.Progress(n_steps=n_features, verbose=verbose)
     scores = Parallel(n_jobs=n_jobs, verbose=verbose)(
         delayed(_group_iter_search_light)(
             A.rows[list_i],
             estimator, X, y, scoring, cv,
-            thread_id + 1, A.shape[0], progress)
+            thread_id + 1, A.shape[0], progress_bar)
         for thread_id, list_i in enumerate(group_iter))
     return np.concatenate(scores)
 

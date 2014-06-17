@@ -97,7 +97,7 @@ class ProgressBar:
         self.verbose = verbose
         if message is None:
             self.message = ("(%(current_state_)0.2f%% completed, "
-                            "%(remaining_time_)d secs remaining).\r")
+                            "%(remaining_time_)d secs remaining)\r")
         self.current_state_ = 0.  # 0% accomplished at initialization time
         self.step_size_ = 100. / n_steps
         self.t0_ = time.time()
@@ -153,16 +153,20 @@ class ProgressBar:
             if additional_message is not None:
                 sys.stderr.write(additional_message.ljust(80))
             # Print general message, defined by the user or default.
-            # This is where it may be useful to have the remaining time as an
-            # explicit attribute.
+            # This is where it may be useful to have the remaining
+            # time as an explicit attribute.
             output_string = self.message % self.__dict__
             # constraint printing to 80 characters
             sys.stderr.write("%80s" % output_string)
+            if self.current_state_ > (100 - self.step_size_):
+                print ""
 
 
+# Register the ProgressBar as a new type object that can be shared e.g. between
+# processes (to safeguard against conflicting concurrent accesses).
 class SharedProgressBar(BaseManager):
     """Object enclosing a ProgressBar for safe concurrent access.
     """
     pass
 
-SharedProgressBar.register('Pro', ProgressBar)
+SharedProgressBar.register('Progress', ProgressBar)

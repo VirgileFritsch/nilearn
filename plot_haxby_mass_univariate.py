@@ -79,7 +79,7 @@ for s in range(n_sessions):
 neg_log_pvals, t_scores_original_data, _ = permuted_ols(
     grouped_conditions_encoded, grouped_fmri_masked,
     # + intercept as a covariate by default
-    n_perm=10000, two_sided_test=True,
+    n_perm=10000, two_sided_test=True, verbose=True,
     n_jobs=1)  # can be changed to use more CPUs
 signed_neg_log_pvals = neg_log_pvals * np.sign(t_scores_original_data)
 signed_neg_log_pvals_unmasked = nifti_masker.inverse_transform(
