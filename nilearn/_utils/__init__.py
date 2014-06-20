@@ -6,4 +6,4 @@ from .numpy_conversions import as_ndarray
 
 from .cache_mixin import CacheMixin
 
-from progress import SharedProgressBar
+from progress import make_progress_bar, EmptyProgressBar

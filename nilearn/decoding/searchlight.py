@@ -25,7 +25,7 @@ from sklearn import neighbors
 import nibabel
 
 from .. import masking
-from .._utils import as_ndarray, SharedProgressBar
+from .._utils import as_ndarray, make_progress_bar, EmptyProgressBar
 
 ESTIMATOR_CATALOG = dict(svc=svm.LinearSVC, svr=svm.SVR)
 
@@ -72,13 +72,13 @@ def search_light(X, y, estimator, A, scoring=None, cv=None, n_jobs=-1,
     -------
     scores : array-like of shape (number of rows in A)
         search_light scores
+
     """
     n_features = A.shape[0]
     group_iter = GroupIterator(n_features, n_jobs)
     # instanciate a progress-bar object
-    progress_bar = SharedProgressBar()
-    progress_bar.start()
-    progress_bar = progress_bar.Progress(n_steps=n_features, verbose=verbose)
+    progress_bar = make_progress_bar(n_steps=n_features,
+                                     verbosity_level=verbose)
     scores = Parallel(n_jobs=n_jobs, verbose=verbose)(
         delayed(_group_iter_search_light)(
             A.rows[list_i],
@@ -117,7 +117,8 @@ class GroupIterator(object):
 
 
 def _group_iter_search_light(list_rows, estimator, X, y,
-                             scoring, cv, thread_id, total, progress_bar):
+                             scoring, cv, thread_id, total,
+                             progress_bar=EmptyProgressBar()):
     """Function for grouped iterations of search_light
 
     Parameters
@@ -151,18 +152,16 @@ def _group_iter_search_light(list_rows, estimator, X, y,
     total : int
         Total number of voxels, used for display
 
-    progress_bar : ProgressBar object
+    progress_bar : nilearn._utils.ProgressBar or EmptyProgressBar object.
       Object used to print the progress status of the algorithm.
-      If `progress_bar.verbose` is:
-        - 0, no progress is shown;
-        - 1, only the overall progress is shown
-        - 2, detailed status of each job is also shown
-
+      It should have been created with `nilearn._utils.make_progress_bar`
+      function.
 
     Returns
     -------
     par_scores : numpy.ndarray
         score for each voxel. dtype: float64.
+
 
     """
     n_voxels_in_chunk = len(list_rows)
@@ -178,12 +177,11 @@ def _group_iter_search_light(list_rows, estimator, X, y,
         par_scores[i] = np.mean(cross_val_score(estimator, X[:, row],
                                                 y, cv=cv, n_jobs=1,
                                                 **kwargs))
-
-        if progress_bar.get_verbose() == 2:
-            additional_message = ('Job #%d processed %d/%d voxels'
-                                  % (thread_id, i + 1, n_voxels_in_chunk))
-        else:
-            additional_message = None
+        # compose additional message.
+        # It will be shown only if `progress_bar` was instanciated with
+        # `verbosity_level` == 2 in the `make_progress_bar` function.
+        additional_message = ('Job #%d processed %d/%d voxels'
+                              % (thread_id, i + 1, n_voxels_in_chunk))
         progress_bar.show_progress(additional_message)
 
     return par_scores

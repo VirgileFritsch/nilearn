@@ -20,7 +20,14 @@ from multiprocessing.managers import BaseManager
 import numpy as np
 
 
-class ProgressBar:
+class EmptyProgressBar(object):
+    """Void object to mimic the API of a ProgressBar object, but does nothing.
+    """
+    def show_progress(self):
+        pass
+
+
+class ProgressBar(object):
     """Shows the progress of a procedure.
 
     The ProgressBar object tracks a procedure and is able to show its
@@ -47,9 +54,13 @@ class ProgressBar:
       In any case, the message is padded with spaces and fit into a
       80-character box.
 
-    verbose : int, optional
-      Define the verbosity level.
-      0 corresponds to no display.
+    allow_additional_message : bool, optional
+      Define the verbosity level. If True, the user can provide an additional
+      message that is shown before the overall status progress.
+      This is useful in the multiprocessing case because we do not have to
+      pass any verbosity level to the parallel workers in addition to the
+      ProgressBar object: that verbosity level is set up once and then used
+      transparently.
 
 
     Attributes
@@ -72,12 +83,6 @@ class ProgressBar:
 
     Caveats
     -------
-    - A verbosity level of 0 does not print anything but potentially
-      slows down the procedure the ProgressBar is tracking. Indeed, in
-      a multiprocessing context, competting jobs still have to
-      synchronize to update the object, even though nothing is
-      actually printed.
-
     - In the multiprocessing case, competing jobs have to synchronize
       regarding the updates of the ProgressBar object. This can slow down
       the procedure a lot if a small discretization level (large `n_steps`)
@@ -93,28 +98,23 @@ class ProgressBar:
 
 
     """
-    def __init__(self, n_steps, message=None, verbose=True):
-        self.verbose = verbose
+    def __init__(self, n_steps, message=None, allow_additional_message=True):
+        self.allow_additional_message = allow_additional_message
+
+        # optionally define default message
         if message is None:
             self.message = ("(%(current_state_)0.2f%% completed, "
                             "%(remaining_time_)d secs remaining)\r")
+
+        # setup 0% progress
         self.current_state_ = 0.  # 0% accomplished at initialization time
         self.step_size_ = 100. / n_steps
         self.t0_ = time.time()
         self.remaining_time_ = np.iinfo(np.int).max
-        if self.verbose:
-            output_string = self.message % self.__dict__
-            # constraint printing to 80 characters
-            sys.stderr.write("%80s" % output_string)
 
-    def get_verbose(self):
-        """Return value of the `verbose` attribute.
-
-        This method is compulsory to expose the `verbose` attribute in a
-        concurrent access context (through the safeguarding `Manager` object)
-
-        """
-        return self.verbose
+        # first print
+        output_string = self.message % self.__dict__
+        sys.stderr.write("%80s" % output_string)  # limit to 80 characters
 
     def get_ellapsed_time(self):
         """Compute ellapsed time.
@@ -145,21 +145,20 @@ class ProgressBar:
         self.current_state_ = self.current_state_ + self.step_size_
         self.remaining_time_ = self.get_remaining_time()
 
-        # Print current status after update
-        if self.verbose:
-            # Optionally print a message that is context-specific and could
-            # not be thought of in advance when the ProgressBar object is
-            # created (e.g. printing the thread id when multiprocessing).
-            if additional_message is not None:
-                sys.stderr.write(additional_message.ljust(80))
-            # Print general message, defined by the user or default.
-            # This is where it may be useful to have the remaining
-            # time as an explicit attribute.
-            output_string = self.message % self.__dict__
-            # constraint printing to 80 characters
-            sys.stderr.write("%80s" % output_string)
-            if self.current_state_ > (100 - self.step_size_):
-                print ""
+        # Print current status after update.
+        # Optionally print a message that is context-specific and could
+        # not be thought of in advance when the ProgressBar object is
+        # created (e.g. printing the thread id when multiprocessing).
+        if additional_message is not None and self.allow_additional_message:
+            sys.stderr.write(additional_message.ljust(80))
+        # Print general message, defined by the user or default.
+        # This is where it may be useful to have the remaining
+        # time as an explicit attribute.
+        output_string = self.message % self.__dict__
+        # constraint printing to 80 characters
+        sys.stderr.write("%80s" % output_string)
+        if self.current_state_ > (100 - self.step_size_):
+            print ""
 
 
 # Register the ProgressBar as a new type object that can be shared e.g. between
@@ -170,3 +169,47 @@ class SharedProgressBar(BaseManager):
     pass
 
 SharedProgressBar.register('Progress', ProgressBar)
+
+
+def make_progress_bar(n_steps, verbosity_level=0):
+    """Routine to create a SharedProgressBar object without being aware of it.
+
+    This function also allows the user to disable the progress bar
+    (specifying a verbosity level of 0). In such a case, a mock object
+    is actually created. It is useful in a multiprocessing context, where
+    no synchronization is required between processes anymore.
+
+    Thanks to the macenisme described above, the use of the progress
+    bar correspond to only one line in the prrocedures that should be
+    tracked (i.e. a call to progress_bar.show_progress()). Thus, the user
+    does not have to understand how a ProgressBar object is made.
+
+    Parameters
+    ----------
+    n_steps : int,
+      Number of steps the procedure is supposed to perform. More
+      generally, steps correspond to milestones that the procedure is
+      expected to reach (e.g. a number of iterations, a file size to
+      be copied/downloaded, ...).  It is up to the caller to ensure
+      that n_steps will actually be performed and --equivalently--
+      that n_steps calls to the `show_progress` method will actually
+      be performed.
+
+    verbosity_level: int,
+      Define the verbosity level of the ProgressBar object:
+      - 0 does not show any progress bar.
+      - 1 only show an overall progress message
+      - 2 allow the use of an additional message that should be provided
+        by the user.
+
+    """
+    if verbosity_level == 0 or n_steps <= 1:
+        return EmptyProgressBar()
+    else:
+        progress_bar = SharedProgressBar()
+        progress_bar.start()
+        progress_bar = progress_bar.Progress(
+            n_steps=n_steps,
+            verbosity_level=(True if verbosity_level == 2 else False))
+
+    return progress_bar

@@ -10,7 +10,7 @@ from scipy import linalg
 from sklearn.utils import check_random_state
 import sklearn.externals.joblib as joblib
 
-from .._utils import SharedProgressBar
+from .._utils import make_progress_bar, EmptyProgressBar
 
 
 def normalize_matrix_on_axis(m, axis=0):
@@ -143,7 +143,7 @@ def _t_score_with_covars_and_normalized_design(tested_vars, target_vars,
 def _permuted_ols_on_chunk(scores_original_data, tested_vars, target_vars,
                            confounding_vars=None, n_perm_chunk=10000,
                            intercept_test=True, two_sided_test=True,
-                           random_state=None, progress_bar=None):
+                           random_state=None, progress_bar=EmptyProgressBar()):
     """Massively univariate group analysis with permuted OLS on a data chunk.
 
     To be used in a parallel computing context.
@@ -179,12 +179,10 @@ def _permuted_ols_on_chunk(scores_original_data, tested_vars, target_vars,
       Seed for random number generator, to have the same permutations
       in each computing units.
 
-    progress_bar : ProgressBar object
+    progress_bar : nilearn._utils.ProgressBar or EmptyProgressBar object.
       Object used to print the progress status of the algorithm.
-      If `progress_bar.verbose` is:
-        - 0, no progress is shown;
-        - 1, only the overall progress is shown
-        - 2, detailed status of each job is also shown
+      It should have been created with `nilearn._utils.make_progress_bar`
+      function.
 
     Returns
     -------
@@ -195,6 +193,7 @@ def _permuted_ols_on_chunk(scores_original_data, tested_vars, target_vars,
     References
     ----------
     [1] Fisher, R. A. (1935). The design of experiments.
+
 
     """
     # initialize the seed of the random generator
@@ -238,8 +237,7 @@ def _permuted_ols_on_chunk(scores_original_data, tested_vars, target_vars,
         scores_as_ranks_part += (h0_fmax_part[i].reshape((-1, 1))
                                  < scores_original_data.T)
         # show progress
-        if progress_bar is not None:
-            progress_bar.show_progress()
+        progress_bar.show_progress()
 
     return scores_as_ranks_part, h0_fmax_part.T
 
@@ -348,13 +346,7 @@ def permuted_ols(tested_vars, target_vars, confounding_vars=None,
     rng = check_random_state(random_state)
 
     # instanciate progress bar object (if needed)
-    if verbose and n_perm > 0:
-        print "Permuted OLS"
-        progress_bar = SharedProgressBar()
-        progress_bar.start()
-        progress_bar = progress_bar.Progress(n_steps=n_perm)
-    else:
-        progress_bar = None
+    progress_bar = make_progress_bar(n_steps=n_perm)
 
     # check n_jobs (number of CPUs)
     if n_jobs == 0:  # invalid according to joblib's conventions
